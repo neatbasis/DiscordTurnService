@@ -1,0 +1,11 @@
+services:
+  discord-turn-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: discord-turn-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-8000}:8000"
