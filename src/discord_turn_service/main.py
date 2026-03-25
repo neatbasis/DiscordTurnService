@@ -1,11 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI
 
 from discord_turn_service.api.routes import router
-from discord_turn_service.config import settings
+from discord_turn_service.config import get_settings
 from discord_turn_service.discord.runtime import runtime
 
 
@@ -15,6 +15,8 @@ def get_app_version() -> str:
     except PackageNotFoundError:
         return "0.0.0"
 
+
+settings = get_settings()
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),

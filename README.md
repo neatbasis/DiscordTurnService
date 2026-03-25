@@ -69,23 +69,21 @@ The service does **not** currently handle:
 
 ## Configuration
 
-Configuration is read from environment variables.
+The service consumes configuration from the process environment. The application does not load a `.env` file directly.
 
-Example:
-
-```dotenv
-DISCORD_TOKEN=your-discord-bot-token-here
-HOST=0.0.0.0
-PORT=8000
-LOG_LEVEL=INFO
-```
-
-Variables:
+### Application environment
 
 - `DISCORD_TOKEN`: Discord bot token
-- `HOST`: local bind host for development
-- `PORT`: host-facing port for local / compose use
-- `LOG_LEVEL`: Python logging level
+- `LOG_LEVEL`: Python logging level (default: `INFO`)
+
+Use `.env.example` as documentation for expected application variables.
+
+### Compose / launch environment
+
+- `PORT`: host port mapping used by Docker Compose
+- `APP_VERSION`: optional build-time version override used during image build
+
+Launch-level variables are handled by Docker Compose, your shell, or your process manager rather than the FastAPI settings model.
 
 ## Installation
 
