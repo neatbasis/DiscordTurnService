@@ -60,3 +60,175 @@ The service does **not** currently handle:
 │           └── service.py
 └── tests/
 ```
+
+## Requirements
+
+- Python 3.11+
+- a Discord bot token
+- a Discord bot/application able to DM the target users
+
+## Configuration
+
+Configuration is read from environment variables.
+
+Example:
+
+```dotenv
+DISCORD_TOKEN=your-discord-bot-token-here
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=INFO
+```
+
+Variables:
+
+- `DISCORD_TOKEN`: Discord bot token
+- `HOST`: local bind host for development
+- `PORT`: host-facing port for local / compose use
+- `LOG_LEVEL`: Python logging level
+
+## Installation
+
+Install in editable mode with development dependencies:
+
+```bash
+pip install -e .[dev]
+```
+
+## Running locally
+
+```bash
+uvicorn discord_turn_service.main:app --host 0.0.0.0 --port 8000
+```
+
+Docs:
+
+- `http://localhost:8000/docs`
+- `http://localhost:8000/openapi.json`
+
+## Running with Docker Compose
+
+Build and start:
+
+```bash
+docker compose up --build -d
+```
+
+The container listens on port `8000` internally. The host port is controlled by `docker-compose.yml` and your `.env`.
+
+## API
+
+### `GET /healthz`
+
+Basic liveness check.
+
+Example response:
+
+```json
+{"status": "ok"}
+```
+
+### `GET /readyz`
+
+Reports whether the Discord runtime is connected and ready.
+
+Example response:
+
+```json
+{"ready": true}
+```
+
+### `POST /ask-turn`
+
+Ask a Discord user a question over DM and wait for one reply or timeout.
+
+Example request:
+
+```json
+{
+  "correlation_id": "ask-001",
+  "user_id": 123456789012345678,
+  "prompt": "What are you doing right now?",
+  "timeout_seconds": 60.0,
+  "mode": "dm"
+}
+```
+
+Answered response:
+
+```json
+{
+  "correlation_id": "ask-001",
+  "status": "answered",
+  "response_text": "Working on the Discord service.",
+  "user_id": 123456789012345678,
+  "channel_id": 987654321098765432,
+  "error": null
+}
+```
+
+Timeout response:
+
+```json
+{
+  "correlation_id": "ask-001",
+  "status": "timeout",
+  "response_text": null,
+  "user_id": 123456789012345678,
+  "channel_id": 987654321098765432,
+  "error": null
+}
+```
+
+## Example curl
+
+```bash
+curl -X POST \
+  'http://localhost:8000/ask-turn' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "correlation_id": "ask-001",
+  "user_id": 123456789012345678,
+  "prompt": "What are you doing right now?",
+  "timeout_seconds": 60,
+  "mode": "dm"
+}'
+```
+
+## Development
+
+Install dev dependencies:
+
+```bash
+pip install -e .[dev]
+```
+
+Run tests:
+
+```bash
+pytest
+```
+
+Lint:
+
+```bash
+ruff check .
+```
+
+## Versioning
+
+Package and API versioning are derived from Git tags via `setuptools-scm`.
+
+For local installs from a Git checkout, the version is inferred from Git metadata.
+
+For Docker builds, pass the version explicitly, for example:
+
+```bash
+export APP_VERSION=$(git describe --tags --exact-match | sed 's/^v//')
+docker compose build
+```
+
+## License
+
+MIT
