@@ -1,10 +1,9 @@
 import asyncio
 import logging
-from typing import Optional
 
 import discord
 
-from discord_turn_service.config import settings
+from discord_turn_service.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ class DiscordRuntime:
 
         self.client = discord.Client(intents=intents)
         self.ready_event = asyncio.Event()
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
         @self.client.event
         async def on_ready() -> None:
@@ -29,6 +28,7 @@ class DiscordRuntime:
     async def start(self) -> None:
         if self._task is not None:
             return
+        settings = get_settings()
         self._task = asyncio.create_task(self.client.start(settings.discord_token))
         logger.info("Discord client startup task created")
 
@@ -36,7 +36,7 @@ class DiscordRuntime:
         try:
             await asyncio.wait_for(self.ready_event.wait(), timeout=timeout)
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False
 
     def is_ready(self) -> bool:
