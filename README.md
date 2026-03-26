@@ -6,7 +6,8 @@ Its primary purpose is to let another service, such as Ask, delegate the task:
 
 > ask this Discord user a question, wait for one reply, and return the reply or a timeout.
 
-**Responsibility split:** Ask decides **who** should be reached and **through which channel**.
+**Responsibility split:** a higher orchestration layer resolves canonical person identity and reachability.
+Ask orchestrates asking behavior against resolved reachable targets.
 DiscordTurnService handles **how to perform a Discord turn** once a Discord recipient is known.
 
 ## Boundary contract: what this service is and is not
@@ -24,6 +25,8 @@ It is responsible for:
 It is intentionally **not** responsible for:
 
 - canonical person modeling / person resolution
+- canonical cross-channel reachability storage
+- channel selection and fallback policy
 - intent classification
 - mission/objective semantics
 - policy reasoning
@@ -31,6 +34,8 @@ It is intentionally **not** responsible for:
 - autonomous planning or multi-step orchestration
 
 If you need those capabilities, build them in an orchestrator layer that calls this service and stores higher-order semantics in a separate system of record.
+
+In other words: upstream systems must resolve canonical identity into Discord-native recipient fields (`user_id`, optional `channel_id`) before invoking DiscordTurnService.
 
 ## Features
 
@@ -174,6 +179,8 @@ Example response:
 
 Ask a Discord user a question over DM and wait for one reply or timeout.
 
+`user_id` and `channel_id` are Discord-native identifiers; callers are responsible for upstream identity/reachability resolution before calling this endpoint.
+
 Example request:
 
 ```json
@@ -236,8 +243,8 @@ This separation keeps DiscordTurnService reliable and reusable while allowing ot
 
 ## Integration shape with Ask
 
-Ask should maintain the canonical view of persons and their reachable channels, then resolve `person -> channel binding -> discord recipient` before calling this API.
-By design, DiscordTurnService accepts Discord-native fields (for example `user_id`), not a canonical `person_id`.
+Ask should consume a resolved reachable target from a higher orchestration layer, then call this API with Discord-native recipient fields.
+By design, DiscordTurnService does not resolve canonical person identity and accepts Discord-native fields (for example `user_id`) rather than a canonical `person_id`.
 
 A reference integration example is available at:
 
