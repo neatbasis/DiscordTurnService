@@ -6,13 +6,12 @@ from discord_turn_service.discord.runtime import runtime
 from discord_turn_service.models.turns import (
     AskTurnRequest,
     AskTurnResult,
-    CreateCanonicalTurnRequest,
+    CreateTurnRequest,
     ErrorDetail,
     ErrorResponse,
     RecordTurnOutcomeRequest,
     Turn,
     TurnDirection,
-    TurnIntent,
     TurnReason,
     TurnReasonType,
     TurnState,
@@ -23,10 +22,13 @@ from discord_turn_service.turns.service import (
     UnsupportedModeError,
     turn_service,
 )
+from discord_turn_service.turns.state_machine import InvalidTurnTransitionError
+from discord_turn_service.turns.store_service import TurnNotFoundError, TurnStoreService
 
 router = APIRouter()
 
 _turn_store: dict[str, Turn] = {}
+turn_store_service = TurnStoreService(store=_turn_store)
 
 
 @router.get("/healthz")
@@ -49,20 +51,14 @@ def _missing_turn_error(turn_id: str) -> HTTPException:
     )
 
 
-def _create_turn(request: CreateCanonicalTurnRequest) -> Turn:
-    turn = Turn(
-        turn_id=str(uuid4()),
-        correlation_id=request.correlation_id,
-        user_id=request.user_id,
-        channel_id=request.channel_id,
-        direction=request.direction,
-        intent=request.intent,
-        state=TurnState.PENDING,
-        prompt=request.prompt,
-        timeout_seconds=request.timeout_seconds,
+def _invalid_transition_error(exc: InvalidTurnTransitionError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=ErrorDetail(
+            code="invalid_turn_transition",
+            message=str(exc),
+        ).model_dump(),
     )
-    _turn_store[turn.turn_id or ""] = turn
-    return turn
 
 
 @router.post(
@@ -76,8 +72,8 @@ def _create_turn(request: CreateCanonicalTurnRequest) -> Turn:
         },
     },
 )
-async def create_turn(request: CreateCanonicalTurnRequest) -> Turn:
-    return _create_turn(request)
+async def create_turn(request: CreateTurnRequest) -> Turn:
+    return turn_store_service.create_turn(turn_id=str(uuid4()), request=request)
 
 
 @router.get(
@@ -88,10 +84,10 @@ async def create_turn(request: CreateCanonicalTurnRequest) -> Turn:
     },
 )
 async def get_turn(turn_id: str) -> Turn:
-    turn = _turn_store.get(turn_id)
-    if turn is None:
-        raise _missing_turn_error(turn_id)
-    return turn
+    try:
+        return turn_store_service.get_turn(turn_id)
+    except TurnNotFoundError as exc:
+        raise _missing_turn_error(turn_id) from exc
 
 
 @router.post(
@@ -99,6 +95,7 @@ async def get_turn(turn_id: str) -> Turn:
     response_model=Turn,
     responses={
         404: {"model": ErrorResponse, "description": "Turn ID does not exist."},
+        409: {"model": ErrorResponse, "description": "Forbidden turn lifecycle transition."},
         422: {
             "model": ErrorResponse,
             "description": "Validation failure for the request payload.",
@@ -106,10 +103,6 @@ async def get_turn(turn_id: str) -> Turn:
     },
 )
 async def record_turn_outcome(turn_id: str, outcome: RecordTurnOutcomeRequest) -> Turn:
-    turn = _turn_store.get(turn_id)
-    if turn is None:
-        raise _missing_turn_error(turn_id)
-
     reason = outcome.reason
     if outcome.status == "error" and reason is None and outcome.error:
         reason = TurnReason(
@@ -118,16 +111,18 @@ async def record_turn_outcome(turn_id: str, outcome: RecordTurnOutcomeRequest) -
             message=outcome.error,
         )
 
-    updated_turn = turn.model_copy(
-        update={
-            "state": TurnState(outcome.status),
-            "response_text": outcome.response_text,
-            "channel_id": outcome.channel_id if outcome.channel_id is not None else turn.channel_id,
-            "reason": reason,
-        }
-    )
-    _turn_store[turn_id] = updated_turn
-    return updated_turn
+    try:
+        return turn_store_service.apply_transition(
+            turn_id=turn_id,
+            to_state=TurnState(outcome.status),
+            response_text=outcome.response_text,
+            channel_id=outcome.channel_id,
+            reason=reason,
+        )
+    except TurnNotFoundError as exc:
+        raise _missing_turn_error(turn_id) from exc
+    except InvalidTurnTransitionError as exc:
+        raise _invalid_transition_error(exc) from exc
 
 
 @router.post(
@@ -136,7 +131,7 @@ async def record_turn_outcome(turn_id: str, outcome: RecordTurnOutcomeRequest) -
     responses={
         409: {
             "model": ErrorResponse,
-            "description": "A user already has an active turn in progress.",
+            "description": "A user already has an active turn in progress or turn transition conflict.",
         },
         422: {
             "model": ErrorResponse,
@@ -145,44 +140,71 @@ async def record_turn_outcome(turn_id: str, outcome: RecordTurnOutcomeRequest) -
     },
 )
 async def ask_turn(request: AskTurnRequest) -> AskTurnResult:
+    canonical_turn = turn_store_service.create_turn(turn_id=str(uuid4()), request=request)
+
     try:
+        turn_store_service.apply_transition(canonical_turn.turn_id or "", TurnState.OPEN)
+
         result = await turn_service.ask_turn(request)
+
+        final_turn = turn_store_service.apply_transition(
+            canonical_turn.turn_id or "",
+            TurnState(result.status),
+            response_text=result.response_text,
+            channel_id=result.channel_id,
+            reason=result.reason,
+        )
+        if final_turn.state == TurnState.ANSWERED:
+            turn_store_service.apply_transition(
+                canonical_turn.turn_id or "",
+                TurnState.PROCESSED,
+                response_text=result.response_text,
+                channel_id=result.channel_id,
+                reason=result.reason,
+            )
+        return result
+
     except DiscordNotReadyError as exc:
+        turn_store_service.apply_transition(
+            canonical_turn.turn_id or "",
+            TurnState.ERROR,
+            reason=TurnReason(
+                type=TurnReasonType.DISCORD,
+                code="discord_not_ready",
+                message=str(exc),
+            ),
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=ErrorDetail(code="discord_not_ready", message=str(exc)).model_dump(),
         ) from exc
     except ActiveTurnExistsError as exc:
+        turn_store_service.apply_transition(
+            canonical_turn.turn_id or "",
+            TurnState.CANCELED,
+            reason=TurnReason(
+                type=TurnReasonType.VALIDATION,
+                code="active_turn_exists",
+                message=str(exc),
+            ),
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=ErrorDetail(code="active_turn_exists", message=str(exc)).model_dump(),
         ) from exc
     except UnsupportedModeError as exc:
+        turn_store_service.apply_transition(
+            canonical_turn.turn_id or "",
+            TurnState.CANCELED,
+            reason=TurnReason(
+                type=TurnReasonType.VALIDATION,
+                code="unsupported_mode",
+                message=str(exc),
+            ),
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorDetail(code="unsupported_mode", message=str(exc)).model_dump(),
         ) from exc
-
-
-    canonical_turn = _create_turn(
-        CreateCanonicalTurnRequest(
-            correlation_id=request.correlation_id,
-            user_id=request.user_id,
-            prompt=request.prompt,
-            timeout_seconds=request.timeout_seconds,
-            mode=request.mode,
-            channel_id=request.channel_id,
-            direction=TurnDirection.SYSTEM_TO_USER,
-            intent=TurnIntent.ASK,
-        )
-    )
-    outcome = RecordTurnOutcomeRequest(
-        status=result.status,
-        response_text=result.response_text,
-        channel_id=result.channel_id,
-        error=result.error,
-        reason=result.reason,
-    )
-    await record_turn_outcome(canonical_turn.turn_id or "", outcome)
-
-    return result
+    except InvalidTurnTransitionError as exc:
+        raise _invalid_transition_error(exc) from exc
