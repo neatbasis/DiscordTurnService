@@ -1,7 +1,8 @@
 """Reference example: Ask-style orchestration calling DiscordTurnService.
 
 This example demonstrates the boundary split:
-- Ask/orchestrator resolves person -> Discord recipient identity.
+- Ask maintains canonical person identity and reachability bindings.
+- Ask resolves person -> channel binding -> Discord recipient identity.
 - DiscordTurnService executes the Discord turn using Discord-native fields.
 """
 
@@ -13,6 +14,13 @@ import httpx
 
 
 @dataclass(frozen=True)
+class PersonRecord:
+    person_ref: str
+    display_name: str
+    person_type: str
+
+
+@dataclass(frozen=True)
 class ReachabilityBinding:
     person_ref: str
     channel_ref: str
@@ -20,9 +28,23 @@ class ReachabilityBinding:
     discord_channel_id: int | None = None
 
 
+PERSONS: dict[str, PersonRecord] = {
+    "person.bond": PersonRecord(
+        person_ref="person.bond",
+        display_name="Bond",
+        person_type="agent",
+    ),
+    "person.moneypenny": PersonRecord(
+        person_ref="person.moneypenny",
+        display_name="Moneypenny",
+        person_type="coordinator",
+    ),
+}
+
+
 REACHABILITY: dict[str, ReachabilityBinding] = {
-    "person.sebastian": ReachabilityBinding(
-        person_ref="person.sebastian",
+    "person.bond": ReachabilityBinding(
+        person_ref="person.bond",
         channel_ref="channel.discord.primary",
         discord_user_id=123456789012345678,
         discord_channel_id=None,
@@ -30,7 +52,7 @@ REACHABILITY: dict[str, ReachabilityBinding] = {
 }
 
 
-def ask_person_via_discord_turn_service(
+def route_person_via_discord_turn_service(
     *,
     base_url: str,
     correlation_id: str,
@@ -38,8 +60,9 @@ def ask_person_via_discord_turn_service(
     prompt: str,
     timeout_seconds: float = 60.0,
 ) -> dict:
-    """Resolve person reachability in Ask layer, then execute Discord turn."""
-    binding = REACHABILITY[person_ref]
+    """Resolve canonical person reachability in Ask, then execute Discord turn."""
+    person = PERSONS[person_ref]
+    binding = REACHABILITY[person.person_ref]
 
     request = {
         "correlation_id": correlation_id,
@@ -57,10 +80,10 @@ def ask_person_via_discord_turn_service(
 
 
 if __name__ == "__main__":
-    result = ask_person_via_discord_turn_service(
+    result = route_person_via_discord_turn_service(
         base_url="http://localhost:8000",
         correlation_id="ask-001",
-        person_ref="person.sebastian",
-        prompt="Could you share your current status?",
+        person_ref="person.bond",
+        prompt="Mission Control requests your current status.",
     )
     print(result)

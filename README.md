@@ -236,7 +236,7 @@ This separation keeps DiscordTurnService reliable and reusable while allowing ot
 
 ## Integration shape with Ask
 
-Ask should resolve `person -> channel binding -> discord recipient` before calling this API.
+Ask should maintain the canonical view of persons and their reachable channels, then resolve `person -> channel binding -> discord recipient` before calling this API.
 By design, DiscordTurnService accepts Discord-native fields (for example `user_id`), not a canonical `person_id`.
 
 A reference integration example is available at:
