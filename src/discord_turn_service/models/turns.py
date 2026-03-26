@@ -66,12 +66,31 @@ class ErrorResponse(BaseModel):
 class CreateTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    correlation_id: str = Field(..., min_length=1)
-    user_id: int
+    correlation_id: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Caller-provided correlation key for joining this Discord turn with upstream "
+            "orchestration records."
+        ),
+    )
+    user_id: int = Field(
+        ...,
+        description=(
+            "Discord user ID (snowflake). Upstream systems must resolve canonical identity "
+            "into this Discord-native recipient field before calling this service."
+        ),
+    )
     prompt: str = Field(..., min_length=1)
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     mode: Literal["dm"] = "dm"
-    channel_id: int | None = None
+    channel_id: int | None = Field(
+        default=None,
+        description=(
+            "Optional Discord DM channel ID (snowflake). If omitted, the service resolves or "
+            "creates a DM channel for the provided user_id."
+        ),
+    )
     direction: TurnDirection = TurnDirection.SYSTEM_TO_USER
 
 
