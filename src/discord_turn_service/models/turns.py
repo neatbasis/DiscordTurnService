@@ -5,8 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class TurnDirection(str, Enum):
-    OUTBOUND = "outbound"
-    INBOUND = "inbound"
+    SYSTEM_TO_USER = "system_to_user"
+    USER_TO_SYSTEM = "user_to_system"
 
 
 class TurnIntent(str, Enum):
@@ -36,6 +36,19 @@ class TurnReason(BaseModel):
     message: str | None = Field(default=None, min_length=1)
 
 
+class ErrorDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+
+
+class ErrorResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    detail: ErrorDetail
+
+
 class CreateTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -45,6 +58,13 @@ class CreateTurnRequest(BaseModel):
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     mode: Literal["dm"] = "dm"
     channel_id: int | None = None
+
+
+class CreateCanonicalTurnRequest(CreateTurnRequest):
+    model_config = ConfigDict(extra="forbid")
+
+    direction: TurnDirection
+    intent: TurnIntent
 
 
 class Turn(BaseModel):
@@ -70,6 +90,16 @@ class TurnOutcome(BaseModel):
     status: Literal["answered", "timeout", "error"]
     response_text: str | None = None
     user_id: int
+    channel_id: int | None = None
+    error: str | None = None
+    reason: TurnReason | None = None
+
+
+class RecordTurnOutcomeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["answered", "timeout", "error"]
+    response_text: str | None = None
     channel_id: int | None = None
     error: str | None = None
     reason: TurnReason | None = None
