@@ -39,6 +39,8 @@ In other words: upstream systems must resolve canonical identity into Discord-na
 
 Freeform and multichoice are transport interaction flavors in this service: they define how a Discord turn is executed and answered, not why a question exists.
 
+Shared ask/choice contracts (`AskKind`, `ChoiceOption`) live in the tiny `interaction_contracts` package to keep this boundary transport-safe and orchestration-neutral.
+
 ## Features
 
 - FastAPI HTTP API
@@ -46,6 +48,7 @@ Freeform and multichoice are transport interaction flavors in this service: they
 - bounded timeout handling
 - one active ask-turn per user
 - structured JSON request/response contract
+- neutral `interaction_contracts` seam for shared ask/choice DTO contracts
 - readiness and health endpoints
 - `src/` layout Python package structure
 - container-friendly deployment
@@ -84,21 +87,25 @@ The service does **not** currently handle:
 ├── Dockerfile
 ├── docker-compose.yml
 ├── src/
-│   └── discord_turn_service/
+│   ├── discord_turn_service/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── api/
+│   │   │   ├── __init__.py
+│   │   │   ├── models.py
+│   │   │   └── routes.py
+│   │   ├── discord/
+│   │   │   ├── __init__.py
+│   │   │   └── runtime.py
+│   │   └── turns/
+│   │       ├── __init__.py
+│   │       ├── registry.py
+│   │       └── service.py
+│   └── interaction_contracts/
 │       ├── __init__.py
-│       ├── main.py
-│       ├── config.py
-│       ├── api/
-│       │   ├── __init__.py
-│       │   ├── models.py
-│       │   └── routes.py
-│       ├── discord/
-│       │   ├── __init__.py
-│       │   └── runtime.py
-│       └── turns/
-│           ├── __init__.py
-│           ├── registry.py
-│           └── service.py
+│       ├── ask.py
+│       └── py.typed
 └── tests/
 ```
 
@@ -212,7 +219,7 @@ Ask a Discord user a question over DM and wait for an answer or timeout.
 Behavior by `ask_kind`:
 
 - `freeform`: send prompt once, accept the first reply.
-- `multichoice`: send a rendered options prompt, resolve by **option number, key, or label**, and retry with a clarification prompt until a choice resolves or the overall timeout budget expires.
+- `multichoice`: send a rendered options prompt, resolve by **option number, key, label, or alias**, and retry with a clarification prompt until a choice resolves or the overall timeout budget expires.
 
 For multichoice answers:
 
@@ -245,7 +252,8 @@ Multichoice request:
   "choices": [
     {
       "key": "accept-mission",
-      "label": "Accept Mission"
+      "label": "Accept Mission",
+      "aliases": ["accept", "yes", "go ahead"]
     },
     {
       "key": "decline-mission",

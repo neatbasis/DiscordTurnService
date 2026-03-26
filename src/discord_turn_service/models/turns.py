@@ -13,6 +13,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from interaction_contracts import AskKind, ChoiceOption
+
 
 class TurnDirection(str, Enum):
     """Frozen internal transport flow labels.
@@ -24,10 +26,6 @@ class TurnDirection(str, Enum):
     SYSTEM_TO_USER = "system_to_user"
     USER_TO_SYSTEM = "user_to_system"
 
-
-class AskKind(str, Enum):
-    FREEFORM = "freeform"
-    MULTICHOICE = "multichoice"
 
 
 class TurnState(str, Enum):
@@ -73,12 +71,6 @@ class ErrorResponse(BaseModel):
 
     detail: ErrorDetail
 
-
-class ChoiceOption(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    key: str = Field(..., min_length=1)
-    label: str = Field(..., min_length=1)
 
 
 class CreateTurnRequest(BaseModel):

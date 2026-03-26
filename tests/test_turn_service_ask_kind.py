@@ -2,9 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from discord_turn_service.models.turns import AskKind, AskTurnRequest
+from discord_turn_service.models.turns import AskTurnRequest
 from discord_turn_service.turns.registry import ActiveTurnRegistry
 from discord_turn_service.turns.service import MULTICHOICE_RETRY_PROMPT, TurnService
+from interaction_contracts import AskKind
 
 
 class _FakeDMChannel:
@@ -89,8 +90,16 @@ def test_resolve_selected_choice_key_for_multichoice_variants() -> None:
         prompt="Choose route",
         ask_kind=AskKind.MULTICHOICE,
         choices=[
-            {"key": "fastest", "label": "Fastest"},
-            {"key": "safest", "label": "Safest"},
+            {
+                "key": "accept-mission",
+                "label": "Accept Mission",
+                "aliases": ["accept", "yes", "go ahead"],
+            },
+            {
+                "key": "decline-mission",
+                "label": "Decline Mission",
+                "aliases": ["decline", "no"],
+            },
         ],
     )
 
@@ -100,23 +109,39 @@ def test_resolve_selected_choice_key_for_multichoice_variants() -> None:
             choices=request.choices,
             response_text="1",
         )
-        == "fastest"
+        == "accept-mission"
     )
     assert (
         TurnService._resolve_selected_choice_key(
             ask_kind=request.ask_kind,
             choices=request.choices,
-            response_text="safest",
+            response_text="decline-mission",
         )
-        == "safest"
+        == "decline-mission"
     )
     assert (
         TurnService._resolve_selected_choice_key(
             ask_kind=request.ask_kind,
             choices=request.choices,
-            response_text="Fastest",
+            response_text="Accept Mission",
         )
-        == "fastest"
+        == "accept-mission"
+    )
+    assert (
+        TurnService._resolve_selected_choice_key(
+            ask_kind=request.ask_kind,
+            choices=request.choices,
+            response_text="yes",
+        )
+        == "accept-mission"
+    )
+    assert (
+        TurnService._resolve_selected_choice_key(
+            ask_kind=request.ask_kind,
+            choices=request.choices,
+            response_text="GO AHEAD",
+        )
+        == "accept-mission"
     )
 
 
