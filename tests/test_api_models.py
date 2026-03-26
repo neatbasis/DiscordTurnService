@@ -100,3 +100,18 @@ def test_ask_turn_request_multichoice_accepts_choices() -> None:
     )
     assert req.ask_kind == AskKind.MULTICHOICE
     assert len(req.choices) == 1
+
+
+def test_ask_turn_request_rejects_direction_field() -> None:
+    try:
+        AskTurnRequest(
+            correlation_id="ask-007",
+            user_id=123,
+            prompt="Hello?",
+            timeout_seconds=60,
+            mode="dm",
+            direction="system_to_user",
+        )
+    except ValidationError:
+        return
+    raise AssertionError("Expected ValidationError for direction field on ask-turn")

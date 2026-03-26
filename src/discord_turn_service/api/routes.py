@@ -11,6 +11,7 @@ from discord_turn_service.models.turns import (
     ErrorResponse,
     RecordTurnOutcomeRequest,
     Turn,
+    TurnDirection,
     TurnReason,
     TurnReasonType,
     TurnState,
@@ -142,7 +143,20 @@ async def record_turn_outcome(turn_id: str, outcome: RecordTurnOutcomeRequest) -
     },
 )
 async def ask_turn(request: AskTurnRequest) -> AskTurnResult:
-    canonical_turn = turn_store_service.create_turn(turn_id=str(uuid4()), request=request)
+    canonical_turn = turn_store_service.create_turn(
+        turn_id=str(uuid4()),
+        request=CreateTurnRequest(
+            correlation_id=request.correlation_id,
+            user_id=request.user_id,
+            prompt=request.prompt,
+            timeout_seconds=request.timeout_seconds,
+            mode=request.mode,
+            channel_id=request.channel_id,
+            direction=TurnDirection.SYSTEM_TO_USER,
+            ask_kind=request.ask_kind,
+            choices=request.choices,
+        ),
+    )
 
     try:
         turn_store_service.apply_transition(canonical_turn.turn_id or "", TurnState.OPEN)
