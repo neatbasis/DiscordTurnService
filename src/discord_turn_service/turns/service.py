@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import cast
 
 import discord
 
@@ -52,7 +53,7 @@ class TurnService:
                     error="Discord user not found",
                 )
 
-            dm_channel = user.dm_channel or await user.create_dm()
+            dm_channel = await self._resolve_dm_channel(request=request, user=user)
             await dm_channel.send(request.prompt)
 
             def check(message: discord.Message) -> bool:
@@ -113,6 +114,36 @@ class TurnService:
                 user_id=request.user_id,
                 correlation_id=request.correlation_id,
             )
+
+    async def _resolve_dm_channel(
+        self,
+        request: AskTurnRequest,
+        user: discord.User,
+    ) -> discord.DMChannel:
+        """Resolve the DM channel used for a turn.
+
+        If a caller already knows a Discord DM channel for this user, it may
+        provide `channel_id`; otherwise we create (or reuse) the user's DM.
+        """
+        if request.channel_id is None:
+            return user.dm_channel or await user.create_dm()
+
+        channel = runtime.client.get_channel(request.channel_id)
+        if channel is None:
+            channel = await runtime.client.fetch_channel(request.channel_id)
+
+        if not isinstance(channel, discord.DMChannel):
+            raise ValueError(
+                f"channel_id={request.channel_id} is not a Discord DM channel"
+            )
+
+        recipient = channel.recipient
+        if recipient is None or recipient.id != request.user_id:
+            raise ValueError(
+                "channel_id does not belong to user_id for DM ask-turn"
+            )
+
+        return cast(discord.DMChannel, channel)
 
 
 registry = ActiveTurnRegistry()

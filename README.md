@@ -6,13 +6,16 @@ Its primary purpose is to let another service, such as Ask, delegate the task:
 
 > ask this Discord user a question, wait for one reply, and return the reply or a timeout.
 
+**Responsibility split:** Ask decides **who** should be reached and **through which channel**.
+DiscordTurnService handles **how to perform a Discord turn** once a Discord recipient is known.
+
 ## Boundary contract: what this service is and is not
 
 DiscordTurnService is a **stateless transport boundary** for directional turn exchange.
 
 It is responsible for:
 
-- actor references (`user_id`, `channel_id`)
+- Discord-ready recipient references (`user_id`, optional `channel_id`)
 - correlation (`correlation_id`)
 - transport payloads (`prompt`, `response_text`)
 - operational lifecycle state (`received`, `open`, `answered`, `timed_out`, `canceled`, `processed`, `error`)
@@ -20,6 +23,7 @@ It is responsible for:
 
 It is intentionally **not** responsible for:
 
+- canonical person modeling / person resolution
 - intent classification
 - mission/objective semantics
 - policy reasoning
@@ -229,6 +233,15 @@ This separation keeps DiscordTurnService reliable and reusable while allowing ot
 - **Platform teams**: add observability, SLOs, and scaling around a single transport surface instead of many ad-hoc integrations.
 - **Ops/compliance teams**: enforce policy and retention in upstream orchestration layers while keeping this component minimal and auditable.
 - **Data teams**: join `correlation_id` with orchestration events to measure response latency, timeout rate, and downstream conversion.
+
+## Integration shape with Ask
+
+Ask should maintain the canonical view of persons and their reachable channels, then resolve `person -> channel binding -> discord recipient` before calling this API.
+By design, DiscordTurnService accepts Discord-native fields (for example `user_id`), not a canonical `person_id`.
+
+A reference integration example is available at:
+
+- `examples/ask_orchestrator_discord_turn.py`
 
 ## Example curl
 
