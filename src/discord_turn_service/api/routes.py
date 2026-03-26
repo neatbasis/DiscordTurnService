@@ -11,7 +11,6 @@ from discord_turn_service.models.turns import (
     ErrorResponse,
     RecordTurnOutcomeRequest,
     Turn,
-    TurnDirection,
     TurnReason,
     TurnReasonType,
     TurnState,
@@ -116,6 +115,7 @@ async def record_turn_outcome(turn_id: str, outcome: RecordTurnOutcomeRequest) -
             turn_id=turn_id,
             to_state=TurnState(outcome.status),
             response_text=outcome.response_text,
+            selected_choice_key=outcome.selected_choice_key,
             channel_id=outcome.channel_id,
             reason=reason,
         )
@@ -131,7 +131,9 @@ async def record_turn_outcome(turn_id: str, outcome: RecordTurnOutcomeRequest) -
     responses={
         409: {
             "model": ErrorResponse,
-            "description": "A user already has an active turn in progress or turn transition conflict.",
+            "description": (
+                "A user already has an active turn in progress or turn transition conflict."
+            ),
         },
         422: {
             "model": ErrorResponse,
@@ -151,6 +153,7 @@ async def ask_turn(request: AskTurnRequest) -> AskTurnResult:
             canonical_turn.turn_id or "",
             TurnState(result.status),
             response_text=result.response_text,
+            selected_choice_key=result.selected_choice_key,
             channel_id=result.channel_id,
             reason=result.reason,
         )
@@ -159,6 +162,7 @@ async def ask_turn(request: AskTurnRequest) -> AskTurnResult:
                 canonical_turn.turn_id or "",
                 TurnState.PROCESSED,
                 response_text=result.response_text,
+                selected_choice_key=result.selected_choice_key,
                 channel_id=result.channel_id,
                 reason=result.reason,
             )

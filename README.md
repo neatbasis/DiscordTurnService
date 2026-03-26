@@ -6,9 +6,7 @@ Its primary purpose is to let another service, such as Ask, delegate the task:
 
 > ask this Discord user a question, wait for one reply, and return the reply or a timeout.
 
-**Responsibility split:** a higher orchestration layer resolves canonical person identity and reachability.
-Ask orchestrates asking behavior against resolved reachable targets.
-DiscordTurnService handles **how to perform a Discord turn** once a Discord recipient is known.
+**Responsibility split:** Ask or another upstream orchestration layer resolves canonical identity and reachability into a Discord-ready recipient before invoking DiscordTurnService. DiscordTurnService handles **how to perform a Discord turn** once a Discord recipient is known.
 
 ## Boundary contract: what this service is and is not
 
@@ -36,6 +34,10 @@ It is intentionally **not** responsible for:
 If you need those capabilities, build them in an orchestrator layer that calls this service and stores higher-order semantics in a separate system of record.
 
 In other words: upstream systems must resolve canonical identity into Discord-native recipient fields (`user_id`, optional `channel_id`) before invoking DiscordTurnService.
+
+**Boundary invariant:** DiscordTurnService accepts Discord-native recipient data, not canonical person references.
+
+Freeform and multichoice are transport interaction flavors in this service: they define how a Discord turn is executed and answered, not why a question exists.
 
 ## Features
 
@@ -132,6 +134,31 @@ Install in editable mode with development dependencies:
 pip install -e .[dev]
 ```
 
+## Developer setup
+
+Use the development extra so test dependencies are installed:
+
+```bash
+python -m pip install --upgrade pip
+pip install -e .[dev]
+```
+
+Run verification:
+
+```bash
+pytest
+ruff check .
+```
+
+### Common setup mistake
+
+If you install with `pip install -e .`, runtime dependencies install but test-only
+dependencies do not. This can lead to errors such as:
+
+- `starlette.testclient requires httpx`
+- `Unknown config option: asyncio_mode`
+- `Unknown pytest.mark.asyncio`
+
 ## Running locally
 
 ```bash
@@ -181,7 +208,7 @@ Ask a Discord user a question over DM and wait for one reply or timeout.
 
 `user_id` and `channel_id` are Discord-native identifiers; callers are responsible for upstream identity/reachability resolution before calling this endpoint.
 
-Example request:
+Freeform request:
 
 ```json
 {
@@ -189,7 +216,26 @@ Example request:
   "user_id": 123456789012345678,
   "prompt": "What are you doing right now?",
   "timeout_seconds": 60.0,
-  "mode": "dm"
+  "mode": "dm",
+  "ask_kind": "freeform"
+}
+```
+
+Multichoice request:
+
+```json
+{
+  "correlation_id": "ask-002",
+  "user_id": 123456789012345678,
+  "prompt": "Choose the route preference.",
+  "timeout_seconds": 60.0,
+  "mode": "dm",
+  "ask_kind": "multichoice",
+  "choices": [
+    {"key": "fastest", "label": "Fastest"},
+    {"key": "safest", "label": "Safest"},
+    {"key": "quietest", "label": "Quietest"}
+  ]
 }
 ```
 
@@ -200,6 +246,21 @@ Answered response:
   "correlation_id": "ask-001",
   "status": "answered",
   "response_text": "Working on the Discord service.",
+  "selected_choice_key": null,
+  "user_id": 123456789012345678,
+  "channel_id": 987654321098765432,
+  "error": null
+}
+```
+
+Answered multichoice response:
+
+```json
+{
+  "correlation_id": "ask-002",
+  "status": "answered",
+  "response_text": "Fastest",
+  "selected_choice_key": "fastest",
   "user_id": 123456789012345678,
   "channel_id": 987654321098765432,
   "error": null

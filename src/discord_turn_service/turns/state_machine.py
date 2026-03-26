@@ -9,11 +9,11 @@ The transition model is intentionally monotonic and operational.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final, Mapping
+from typing import Final
 
 from discord_turn_service.models.turns import Turn, TurnState
-
 
 ALLOWED_TRANSITIONS: Final[Mapping[TurnState, frozenset[TurnState]]] = {
     TurnState.RECEIVED: frozenset(

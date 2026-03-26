@@ -5,7 +5,7 @@ from typing import cast
 import discord
 
 from discord_turn_service.discord.runtime import runtime
-from discord_turn_service.models.turns import AskTurnRequest, AskTurnResult
+from discord_turn_service.models.turns import AskKind, AskTurnRequest, AskTurnResult, ChoiceOption
 from discord_turn_service.turns.registry import ActiveTurnRegistry
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class TurnService:
                 )
 
             dm_channel = await self._resolve_dm_channel(request=request, user=user)
-            await dm_channel.send(request.prompt)
+            await dm_channel.send(self._render_prompt(request))
 
             def check(message: discord.Message) -> bool:
                 return (
@@ -79,6 +79,11 @@ class TurnService:
                     correlation_id=request.correlation_id,
                     status="answered",
                     response_text=reply.content,
+                    selected_choice_key=self._resolve_selected_choice_key(
+                        ask_kind=request.ask_kind,
+                        choices=request.choices,
+                        response_text=reply.content,
+                    ),
                     user_id=request.user_id,
                     channel_id=reply.channel.id,
                 )
@@ -144,6 +149,39 @@ class TurnService:
             )
 
         return cast(discord.DMChannel, channel)
+
+    @staticmethod
+    def _render_prompt(request: AskTurnRequest) -> str:
+        if request.ask_kind == AskKind.FREEFORM:
+            return request.prompt
+
+        lines = [request.prompt, "", "Reply with the option number, key, or label:"]
+        for idx, choice in enumerate(request.choices, start=1):
+            lines.append(f"{idx}. {choice.label} ({choice.key})")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _resolve_selected_choice_key(
+        *,
+        ask_kind: AskKind,
+        choices: list[ChoiceOption],
+        response_text: str | None,
+    ) -> str | None:
+        if ask_kind != AskKind.MULTICHOICE or response_text is None:
+            return None
+
+        normalized = response_text.strip().casefold()
+        if not normalized:
+            return None
+
+        for index, choice in enumerate(choices, start=1):
+            if normalized == str(index):
+                return choice.key
+            if normalized == choice.key.casefold():
+                return choice.key
+            if normalized == choice.label.casefold():
+                return choice.key
+        return None
 
 
 registry = ActiveTurnRegistry()
