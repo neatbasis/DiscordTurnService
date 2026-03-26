@@ -200,9 +200,24 @@ Example response:
 
 ### `POST /ask-turn`
 
-Ask a Discord user a question over DM and wait for one reply or timeout.
+Ask a Discord user a question over DM and wait for an answer or timeout.
 
 `user_id` and `channel_id` are Discord-native identifiers; callers are responsible for upstream identity/reachability resolution before calling this endpoint.
+
+`/ask-turn` callers provide transport inputs only. Direction semantics are internal and frozen as:
+
+- outbound = service/system → Discord user (`system_to_user`)
+- inbound = Discord user → service/system (`user_to_system`)
+
+Behavior by `ask_kind`:
+
+- `freeform`: send prompt once, accept the first reply.
+- `multichoice`: send a rendered options prompt, resolve by **option number, key, or label**, and retry with a clarification prompt until a choice resolves or the overall timeout budget expires.
+
+For multichoice answers:
+
+- `selected_choice_key` is the canonical structured result.
+- `response_text` is the actual user reply that resolved the selected choice.
 
 Freeform request:
 
@@ -221,16 +236,25 @@ Multichoice request:
 
 ```json
 {
-  "correlation_id": "ask-002",
-  "user_id": 123456789012345678,
-  "prompt": "Choose the route preference.",
-  "timeout_seconds": 60.0,
+  "correlation_id": "string-123-kebap",
+  "user_id": 123123123,
+  "prompt": "Your mission, should you accept it, is to... ..this question will time out in 60 seconds",
+  "timeout_seconds": 60,
   "mode": "dm",
   "ask_kind": "multichoice",
   "choices": [
-    {"key": "fastest", "label": "Fastest"},
-    {"key": "safest", "label": "Safest"},
-    {"key": "quietest", "label": "Quietest"}
+    {
+      "key": "accept-mission",
+      "label": "Accept Mission"
+    },
+    {
+      "key": "decline-mission",
+      "label": "Decline Mission"
+    },
+    {
+      "key": "defer-mission",
+      "label": "Defer Mission"
+    }
   ]
 }
 ```
@@ -253,13 +277,14 @@ Answered multichoice response:
 
 ```json
 {
-  "correlation_id": "ask-002",
+  "correlation_id": "string-123-kebap",
   "status": "answered",
-  "response_text": "Fastest",
-  "selected_choice_key": "fastest",
-  "user_id": 123456789012345678,
-  "channel_id": 987654321098765432,
-  "error": null
+  "response_text": "1",
+  "selected_choice_key": "accept-mission",
+  "user_id": 123123123,
+  "channel_id": 123123123,
+  "error": null,
+  "reason": null
 }
 ```
 
@@ -309,17 +334,42 @@ A reference integration example is available at:
 
 ## Example curl
 
+Freeform ask:
+
 ```bash
 curl -X POST \
   'http://localhost:8000/ask-turn' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{
-  "correlation_id": "ask-001",
+  "correlation_id": "ask-freeform-001",
   "user_id": 123456789012345678,
   "prompt": "What are you doing right now?",
   "timeout_seconds": 60,
-  "mode": "dm"
+  "mode": "dm",
+  "ask_kind": "freeform"
+}'
+```
+
+Multichoice ask:
+
+```bash
+curl -X POST \
+  'http://localhost:8000/ask-turn' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "correlation_id": "ask-multi-001",
+  "user_id": 123456789012345678,
+  "prompt": "Choose a mission response.",
+  "timeout_seconds": 60,
+  "mode": "dm",
+  "ask_kind": "multichoice",
+  "choices": [
+    {"key": "accept-mission", "label": "Accept Mission"},
+    {"key": "decline-mission", "label": "Decline Mission"},
+    {"key": "defer-mission", "label": "Defer Mission"}
+  ]
 }'
 ```
 

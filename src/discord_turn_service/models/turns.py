@@ -15,6 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TurnDirection(str, Enum):
+    """Frozen internal transport flow labels.
+
+    SYSTEM_TO_USER is the canonical outbound flow (service/system -> Discord user).
+    USER_TO_SYSTEM is the canonical inbound flow (Discord user -> service/system).
+    """
+
     SYSTEM_TO_USER = "system_to_user"
     USER_TO_SYSTEM = "user_to_system"
 
@@ -170,8 +176,56 @@ class RecordTurnOutcomeRequest(BaseModel):
     reason: TurnReason | None = None
 
 
-class AskTurnRequest(CreateTurnRequest):
+class AskTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    correlation_id: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Caller-provided correlation key for joining this Discord turn with upstream "
+            "orchestration records."
+        ),
+    )
+    user_id: int = Field(
+        ...,
+        description=(
+            "Discord user ID (snowflake). Upstream systems must resolve canonical identity "
+            "into this Discord-native recipient field before calling this service."
+        ),
+    )
+    prompt: str = Field(..., min_length=1)
+    timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+    mode: Literal["dm"] = "dm"
+    channel_id: int | None = Field(
+        default=None,
+        description=(
+            "Optional Discord DM channel ID (snowflake). If omitted, the service resolves or "
+            "creates a DM channel for the provided user_id."
+        ),
+    )
+    ask_kind: AskKind = Field(
+        default=AskKind.FREEFORM,
+        description=(
+            "Discord interaction flavor for this turn. This is a transport interaction "
+            "property (freeform vs multichoice), not higher-order semantic intent."
+        ),
+    )
+    choices: list[ChoiceOption] = Field(
+        default_factory=list,
+        description=(
+            "Selectable options for multichoice turns. Must be non-empty when "
+            "ask_kind='multichoice' and empty for freeform turns."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_ask_kind_choices(self) -> "AskTurnRequest":
+        if self.ask_kind == AskKind.MULTICHOICE and not self.choices:
+            raise ValueError("choices must be provided when ask_kind='multichoice'")
+        if self.ask_kind == AskKind.FREEFORM and self.choices:
+            raise ValueError("choices must be empty when ask_kind='freeform'")
+        return self
 
 
 class AskTurnResult(TurnOutcome):

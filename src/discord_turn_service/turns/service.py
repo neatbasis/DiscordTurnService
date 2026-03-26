@@ -9,6 +9,10 @@ from discord_turn_service.models.turns import AskKind, AskTurnRequest, AskTurnRe
 from discord_turn_service.turns.registry import ActiveTurnRegistry
 
 logger = logging.getLogger(__name__)
+MULTICHOICE_RETRY_PROMPT = (
+    "I couldn't match that reply to one of the options. "
+    "Reply with the option number, key, or label."
+)
 
 
 class DiscordNotReadyError(RuntimeError):
@@ -62,45 +66,58 @@ class TurnService:
                     and message.channel.id == dm_channel.id
                 )
 
-            try:
-                reply = await runtime.client.wait_for(
-                    "message",
-                    check=check,
-                    timeout=request.timeout_seconds,
-                )
-                duration = time.monotonic() - started
-                logger.info(
-                    "ask_turn answered correlation_id=%s user_id=%s duration=%.3f",
-                    request.correlation_id,
-                    request.user_id,
-                    duration,
-                )
-                return AskTurnResult(
-                    correlation_id=request.correlation_id,
-                    status="answered",
-                    response_text=reply.content,
-                    selected_choice_key=self._resolve_selected_choice_key(
-                        ask_kind=request.ask_kind,
-                        choices=request.choices,
-                        response_text=reply.content,
-                    ),
-                    user_id=request.user_id,
-                    channel_id=reply.channel.id,
-                )
-            except TimeoutError:
-                duration = time.monotonic() - started
-                logger.info(
-                    "ask_turn timeout correlation_id=%s user_id=%s duration=%.3f",
-                    request.correlation_id,
-                    request.user_id,
-                    duration,
-                )
-                return AskTurnResult(
-                    correlation_id=request.correlation_id,
-                    status="timed_out",
-                    user_id=request.user_id,
+            reply = await self._wait_for_reply_or_none(
+                request=request,
+                check=check,
+                started=started,
+            )
+            if reply is None:
+                return self._timed_out_result(
+                    request=request,
                     channel_id=dm_channel.id,
+                    started=started,
                 )
+
+            if request.ask_kind == AskKind.FREEFORM:
+                return self._answered_result(
+                    request=request,
+                    response_text=reply.content,
+                    selected_choice_key=None,
+                    channel_id=reply.channel.id,
+                    started=started,
+                )
+
+            selected_choice_key = self._resolve_selected_choice_key(
+                ask_kind=request.ask_kind,
+                choices=request.choices,
+                response_text=reply.content,
+            )
+            while selected_choice_key is None:
+                await dm_channel.send(MULTICHOICE_RETRY_PROMPT)
+                reply = await self._wait_for_reply_or_none(
+                    request=request,
+                    check=check,
+                    started=started,
+                )
+                if reply is None:
+                    return self._timed_out_result(
+                        request=request,
+                        channel_id=dm_channel.id,
+                        started=started,
+                    )
+                selected_choice_key = self._resolve_selected_choice_key(
+                    ask_kind=request.ask_kind,
+                    choices=request.choices,
+                    response_text=reply.content,
+                )
+
+            return self._answered_result(
+                request=request,
+                response_text=reply.content,
+                selected_choice_key=selected_choice_key,
+                channel_id=reply.channel.id,
+                started=started,
+            )
 
         except Exception as exc:
             logger.exception(
@@ -182,6 +199,71 @@ class TurnService:
             if normalized == choice.label.casefold():
                 return choice.key
         return None
+
+    @staticmethod
+    async def _wait_for_reply_or_none(
+        *,
+        request: AskTurnRequest,
+        check: object,
+        started: float,
+    ) -> discord.Message | None:
+        remaining_timeout = request.timeout_seconds - (time.monotonic() - started)
+        if remaining_timeout <= 0:
+            return None
+        try:
+            return await runtime.client.wait_for(
+                "message",
+                check=check,
+                timeout=remaining_timeout,
+            )
+        except TimeoutError:
+            return None
+
+    @staticmethod
+    def _answered_result(
+        *,
+        request: AskTurnRequest,
+        response_text: str,
+        selected_choice_key: str | None,
+        channel_id: int,
+        started: float,
+    ) -> AskTurnResult:
+        duration = time.monotonic() - started
+        logger.info(
+            "ask_turn answered correlation_id=%s user_id=%s duration=%.3f",
+            request.correlation_id,
+            request.user_id,
+            duration,
+        )
+        return AskTurnResult(
+            correlation_id=request.correlation_id,
+            status="answered",
+            response_text=response_text,
+            selected_choice_key=selected_choice_key,
+            user_id=request.user_id,
+            channel_id=channel_id,
+        )
+
+    @staticmethod
+    def _timed_out_result(
+        *,
+        request: AskTurnRequest,
+        channel_id: int,
+        started: float,
+    ) -> AskTurnResult:
+        duration = time.monotonic() - started
+        logger.info(
+            "ask_turn timeout correlation_id=%s user_id=%s duration=%.3f",
+            request.correlation_id,
+            request.user_id,
+            duration,
+        )
+        return AskTurnResult(
+            correlation_id=request.correlation_id,
+            status="timed_out",
+            user_id=request.user_id,
+            channel_id=channel_id,
+        )
 
 
 registry = ActiveTurnRegistry()
