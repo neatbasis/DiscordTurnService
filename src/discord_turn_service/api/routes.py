@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
-from discord_turn_service.api.models import AskTurnRequest, AskTurnResult
 from discord_turn_service.discord.runtime import runtime
+from discord_turn_service.models.turns import AskTurnRequest, AskTurnResult
 from discord_turn_service.turns.service import (
     ActiveTurnExistsError,
     DiscordNotReadyError,

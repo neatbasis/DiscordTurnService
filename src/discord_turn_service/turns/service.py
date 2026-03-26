@@ -1,11 +1,10 @@
-import asyncio
 import logging
 import time
 
 import discord
 
-from discord_turn_service.api.models import AskTurnRequest, AskTurnResult
 from discord_turn_service.discord.runtime import runtime
+from discord_turn_service.models.turns import AskTurnRequest, AskTurnResult
 from discord_turn_service.turns.registry import ActiveTurnRegistry
 
 logger = logging.getLogger(__name__)
@@ -82,7 +81,7 @@ class TurnService:
                     user_id=request.user_id,
                     channel_id=reply.channel.id,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 duration = time.monotonic() - started
                 logger.info(
                     "ask_turn timeout correlation_id=%s user_id=%s duration=%.3f",
