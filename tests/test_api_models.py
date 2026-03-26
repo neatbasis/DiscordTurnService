@@ -1,6 +1,6 @@
 from pydantic import ValidationError
 
-from discord_turn_service.api.models import AskTurnRequest
+from discord_turn_service.models.turns import AskTurnRequest
 
 
 def test_ask_turn_request_valid() -> None:
