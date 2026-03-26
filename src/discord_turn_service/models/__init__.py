@@ -1,8 +1,6 @@
 from discord_turn_service.models.turns import (
-    AskKind,
     AskTurnRequest,
     AskTurnResult,
-    ChoiceOption,
     CreateTurnRequest,
     Turn,
     TurnDirection,
@@ -11,6 +9,7 @@ from discord_turn_service.models.turns import (
     TurnReasonType,
     TurnState,
 )
+from interaction_contracts import AskKind, ChoiceOption
 
 __all__ = [
     "TurnDirection",

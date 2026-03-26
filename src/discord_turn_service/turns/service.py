@@ -5,13 +5,14 @@ from typing import cast
 import discord
 
 from discord_turn_service.discord.runtime import runtime
-from discord_turn_service.models.turns import AskKind, AskTurnRequest, AskTurnResult, ChoiceOption
+from discord_turn_service.models.turns import AskTurnRequest, AskTurnResult
 from discord_turn_service.turns.registry import ActiveTurnRegistry
+from interaction_contracts import AskKind, ChoiceOption
 
 logger = logging.getLogger(__name__)
 MULTICHOICE_RETRY_PROMPT = (
     "I couldn't match that reply to one of the options. "
-    "Reply with the option number, key, or label."
+    "Reply with the option number, key, label, or alias."
 )
 
 
@@ -172,7 +173,7 @@ class TurnService:
         if request.ask_kind == AskKind.FREEFORM:
             return request.prompt
 
-        lines = [request.prompt, "", "Reply with the option number, key, or label:"]
+        lines = [request.prompt, "", "Reply with the option number, key, label, or alias:"]
         for idx, choice in enumerate(request.choices, start=1):
             lines.append(f"{idx}. {choice.label} ({choice.key})")
         return "\n".join(lines)
@@ -197,6 +198,8 @@ class TurnService:
             if normalized == choice.key.casefold():
                 return choice.key
             if normalized == choice.label.casefold():
+                return choice.key
+            if any(normalized == alias.strip().casefold() for alias in choice.aliases):
                 return choice.key
         return None
 
