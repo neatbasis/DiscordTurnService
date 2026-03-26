@@ -1,4 +1,4 @@
-"""Reference example: Ask-style orchestration calling DiscordTurnService.
+"""Reference example: upstream orchestration calling DiscordTurnService.
 
 This example demonstrates the boundary split:
 - A higher orchestration layer resolves canonical identity and reachability.
@@ -9,6 +9,7 @@ This example demonstrates the boundary split:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import httpx
 
@@ -27,6 +28,8 @@ def route_discord_query_via_turn_service(
     correlation_id: str,
     recipient: DiscordRecipient,
     prompt: str,
+    ask_kind: Literal["freeform", "multichoice"] = "freeform",
+    choices: list[dict[str, str]] | None = None,
     timeout_seconds: float = 60.0,
 ) -> dict:
     """Execute a Discord turn against an already-resolved Discord recipient."""
@@ -39,7 +42,10 @@ def route_discord_query_via_turn_service(
         "timeout_seconds": timeout_seconds,
         "mode": "dm",
         "direction": "system_to_user",
+        "ask_kind": ask_kind,
     }
+    if choices is not None:
+        request["choices"] = choices
 
     response = httpx.post(f"{base_url}/ask-turn", json=request, timeout=timeout_seconds + 10)
     response.raise_for_status()
@@ -47,17 +53,31 @@ def route_discord_query_via_turn_service(
 
 
 if __name__ == "__main__":
-    # In the real system, this recipient would be resolved upstream from
-    # canonical person identity and reachability data.
+    # In the real system, this recipient would be resolved upstream by
+    # orchestration before Ask calls DiscordTurnService.
     recipient = DiscordRecipient(
         discord_user_id=123456789012345678,
         discord_channel_id=None,
     )
 
-    result = route_discord_query_via_turn_service(
+    freeform_result = route_discord_query_via_turn_service(
         base_url="http://localhost:8000",
         correlation_id="ask-001",
         recipient=recipient,
         prompt="Mission Control requests your current status.",
     )
-    print(result)
+    print(freeform_result)
+
+    multichoice_result = route_discord_query_via_turn_service(
+        base_url="http://localhost:8000",
+        correlation_id="ask-002",
+        recipient=recipient,
+        prompt="Choose route preference.",
+        ask_kind="multichoice",
+        choices=[
+            {"key": "fastest", "label": "Fastest"},
+            {"key": "safest", "label": "Safest"},
+            {"key": "quietest", "label": "Quietest"},
+        ],
+    )
+    print(multichoice_result)

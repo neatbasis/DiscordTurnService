@@ -1,6 +1,8 @@
 from discord_turn_service.models.turns import (
+    AskKind,
     AskTurnRequest,
     AskTurnResult,
+    ChoiceOption,
     CreateTurnRequest,
     ErrorDetail,
     ErrorResponse,
@@ -26,4 +28,6 @@ __all__ = [
     "TurnOutcome",
     "AskTurnRequest",
     "AskTurnResult",
+    "AskKind",
+    "ChoiceOption",
 ]

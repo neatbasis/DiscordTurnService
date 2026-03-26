@@ -30,6 +30,8 @@ class TurnStoreService:
             direction=request.direction,
             state=TurnState.RECEIVED,
             prompt=request.prompt,
+            ask_kind=request.ask_kind,
+            choices=request.choices,
             timeout_seconds=request.timeout_seconds,
         )
         self._store[turn_id] = turn
