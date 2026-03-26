@@ -1,3 +1,13 @@
+"""Canonical transport-facing turn models.
+
+These models define the stateless interaction boundary for directional
+turn exchange. They intentionally exclude higher-order semantic concepts
+such as intent, mission meaning, question state, or policy interpretation.
+
+This layer records who said what to whom, in which direction, under which
+correlation and operational outcome conditions.
+"""
+
 from enum import Enum
 from typing import Literal
 
@@ -9,15 +19,19 @@ class TurnDirection(str, Enum):
     USER_TO_SYSTEM = "user_to_system"
 
 
-class TurnIntent(str, Enum):
-    ASK = "ask"
-    REPLY = "reply"
-
-
 class TurnState(str, Enum):
-    PENDING = "pending"
+    """Operational lifecycle states for a canonical turn.
+
+    These states describe transport and processing progression only.
+    They do not describe semantic interpretation or downstream planning state.
+    """
+
+    RECEIVED = "received"
+    OPEN = "open"
     ANSWERED = "answered"
-    TIMEOUT = "timeout"
+    TIMED_OUT = "timed_out"
+    CANCELED = "canceled"
+    PROCESSED = "processed"
     ERROR = "error"
 
 
@@ -58,13 +72,7 @@ class CreateTurnRequest(BaseModel):
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     mode: Literal["dm"] = "dm"
     channel_id: int | None = None
-
-
-class CreateCanonicalTurnRequest(CreateTurnRequest):
-    model_config = ConfigDict(extra="forbid")
-
-    direction: TurnDirection
-    intent: TurnIntent
+    direction: TurnDirection = TurnDirection.SYSTEM_TO_USER
 
 
 class Turn(BaseModel):
@@ -75,7 +83,6 @@ class Turn(BaseModel):
     user_id: int
     channel_id: int | None = None
     direction: TurnDirection
-    intent: TurnIntent
     state: TurnState
     prompt: str = Field(..., min_length=1)
     response_text: str | None = None
@@ -87,7 +94,7 @@ class TurnOutcome(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     correlation_id: str = Field(..., min_length=1)
-    status: Literal["answered", "timeout", "error"]
+    status: Literal["answered", "timed_out", "error"]
     response_text: str | None = None
     user_id: int
     channel_id: int | None = None
@@ -98,7 +105,7 @@ class TurnOutcome(BaseModel):
 class RecordTurnOutcomeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["answered", "timeout", "error"]
+    status: Literal["answered", "timed_out", "canceled", "processed", "error"]
     response_text: str | None = None
     channel_id: int | None = None
     error: str | None = None

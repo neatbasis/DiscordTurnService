@@ -4,7 +4,6 @@ from discord_turn_service.models.turns import (
     CreateTurnRequest,
     Turn,
     TurnDirection,
-    TurnIntent,
     TurnOutcome,
     TurnReason,
     TurnReasonType,
@@ -13,7 +12,6 @@ from discord_turn_service.models.turns import (
 
 __all__ = [
     "TurnDirection",
-    "TurnIntent",
     "TurnState",
     "TurnReasonType",
     "TurnReason",

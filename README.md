@@ -6,6 +6,28 @@ Its primary purpose is to let another service, such as Ask, delegate the task:
 
 > ask this Discord user a question, wait for one reply, and return the reply or a timeout.
 
+## Boundary contract: what this service is and is not
+
+DiscordTurnService is a **stateless transport boundary** for directional turn exchange.
+
+It is responsible for:
+
+- actor references (`user_id`, `channel_id`)
+- correlation (`correlation_id`)
+- transport payloads (`prompt`, `response_text`)
+- operational lifecycle state (`received`, `open`, `answered`, `timed_out`, `canceled`, `processed`, `error`)
+- timeout and error handling
+
+It is intentionally **not** responsible for:
+
+- intent classification
+- mission/objective semantics
+- policy reasoning
+- answer quality grading
+- autonomous planning or multi-step orchestration
+
+If you need those capabilities, build them in an orchestrator layer that calls this service and stores higher-order semantics in a separate system of record.
+
 ## Features
 
 - FastAPI HTTP API
@@ -24,6 +46,14 @@ The current implementation is intentionally narrow:
 - DM mode only
 - synchronous `POST /ask-turn` request waits for answer or timeout
 - one active turn per Discord user at a time
+
+Turn lifecycle transitions are monotonic and operational at this layer:
+
+- `received -> open | processed | error`
+- `open -> answered | timed_out | canceled | error`
+- `answered -> processed`
+
+Terminal states (`timed_out`, `canceled`, `processed`, `error`) do not transition back to active states.
 
 The service does **not** currently handle:
 
@@ -170,13 +200,35 @@ Timeout response:
 ```json
 {
   "correlation_id": "ask-001",
-  "status": "timeout",
+  "status": "timed_out",
   "response_text": null,
   "user_id": 123456789012345678,
   "channel_id": 987654321098765432,
   "error": null
 }
 ```
+
+## Using this service outside its scope
+
+When your scenario requires richer semantics (intent, mission context, retries, escalation, policies), keep this service as a narrow execution adapter and compose it with other systems:
+
+1. **Ingress/orchestrator service**
+   - Accept business-level requests (mission/task/intent).
+   - Derive transport prompt(s) and call `POST /ask-turn`.
+2. **Semantic state store**
+   - Persist intent, objective progress, and workflow state in your domain model.
+   - Store `correlation_id` as the join key to this transport exchange.
+3. **Policy/quality layer**
+   - Apply moderation, fallback logic, and answer quality checks before acting on returned text.
+
+This separation keeps DiscordTurnService reliable and reusable while allowing other teams to iterate on business logic independently.
+
+## How stakeholders can create value
+
+- **Product teams**: standardize cross-channel "ask user and wait" flows by reusing this boundary rather than embedding Discord bot logic in every product.
+- **Platform teams**: add observability, SLOs, and scaling around a single transport surface instead of many ad-hoc integrations.
+- **Ops/compliance teams**: enforce policy and retention in upstream orchestration layers while keeping this component minimal and auditable.
+- **Data teams**: join `correlation_id` with orchestration events to measure response latency, timeout rate, and downstream conversion.
 
 ## Example curl
 

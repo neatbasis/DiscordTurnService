@@ -1,14 +1,12 @@
 from discord_turn_service.models.turns import (
     AskTurnRequest,
     AskTurnResult,
-    CreateCanonicalTurnRequest,
     CreateTurnRequest,
     ErrorDetail,
     ErrorResponse,
     RecordTurnOutcomeRequest,
     Turn,
     TurnDirection,
-    TurnIntent,
     TurnOutcome,
     TurnReason,
     TurnReasonType,
@@ -17,7 +15,6 @@ from discord_turn_service.models.turns import (
 
 __all__ = [
     "TurnDirection",
-    "TurnIntent",
     "TurnState",
     "TurnReasonType",
     "TurnReason",
@@ -25,7 +22,6 @@ __all__ = [
     "ErrorResponse",
     "RecordTurnOutcomeRequest",
     "CreateTurnRequest",
-    "CreateCanonicalTurnRequest",
     "Turn",
     "TurnOutcome",
     "AskTurnRequest",

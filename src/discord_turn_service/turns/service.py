@@ -91,7 +91,7 @@ class TurnService:
                 )
                 return AskTurnResult(
                     correlation_id=request.correlation_id,
-                    status="timeout",
+                    status="timed_out",
                     user_id=request.user_id,
                     channel_id=dm_channel.id,
                 )
