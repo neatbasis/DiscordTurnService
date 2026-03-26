@@ -128,27 +128,23 @@ Launch-level variables are handled by Docker Compose, your shell, or your proces
 
 ## Installation
 
-Install in editable mode with development dependencies:
+Runtime install (no test/lint tooling):
 
 ```bash
-pip install -e .[dev]
+pip install .
 ```
 
 ## Developer setup
 
-Use the development extra so test dependencies are installed:
+Canonical contributor workflow:
 
 ```bash
 python -m pip install --upgrade pip
 pip install -e .[dev]
+script/check.sh
 ```
 
-Run verification:
-
-```bash
-pytest
-ruff check .
-```
+`script/setup_dev.sh` runs the same setup + verification steps for convenience.
 
 ### Common setup mistake
 
@@ -329,23 +325,10 @@ curl -X POST \
 
 ## Development
 
-Install dev dependencies:
+Use `script/check.sh` for local verification. It runs:
 
-```bash
-pip install -e .[dev]
-```
-
-Run tests:
-
-```bash
-pytest
-```
-
-Lint:
-
-```bash
-ruff check .
-```
+- `python -m pytest`
+- `python -m ruff check .`
 
 ## Versioning
 
