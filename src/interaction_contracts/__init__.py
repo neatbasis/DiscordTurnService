@@ -1,5 +1,26 @@
-"""Transport-safe, orchestration-neutral shared ask/choice contracts."""
+"""Transport-safe semantic interaction contracts.
 
-from .ask import AskKind, ChoiceOption
+This package defines neutral DTO-like models shared across orchestration and
+transport boundaries. It is the semantic seam, not the runtime implementation
+layer.
+"""
 
-__all__ = ["AskKind", "ChoiceOption"]
+from .ask import (
+    AnswerTemplate,
+    AskKind,
+    ChoiceOption,
+    InteractionMode,
+    InteractionResult,
+    InteractionSpec,
+    SlotSpec,
+)
+
+__all__ = [
+    "AskKind",
+    "InteractionMode",
+    "ChoiceOption",
+    "SlotSpec",
+    "AnswerTemplate",
+    "InteractionSpec",
+    "InteractionResult",
+]
